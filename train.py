@@ -13,7 +13,7 @@ import torch
 from collections import defaultdict, deque
 from game import Board, Game
 from mcts import AlphaPlayer
-from network import PolicyValueNet, AlphaAgent
+from network import PolicyValueNet, AlphaAgent, TEAgent
 from tensorboardX import SummaryWriter
 
 
@@ -28,21 +28,28 @@ class AlphaSelfTrain:
         self.n_playout = 64
         self.c_puct = 5
 
-        self.learn_rate = 1e-3
-        self.buffer_size = 40000
-        self.batch_size = 64
+        self.learn_rate = 2e-4
+        self.buffer_size = 400
+        self.batch_size = 128
 
         self.check_freq = 5
-        self.game_total_collect = 100
-        self.game_singl_collect = 2
+        self.game_total_collect = 400
+        self.game_singl_collect = 10
         self.train_singl_epoch  = 2
 
         self.train_epoch = 1
         self.games_epoch = 1
-        self.summary = SummaryWriter()
         self.buffer  = deque(maxlen=self.buffer_size)
 
-        self.alpha_agent  = AlphaAgent(self.size)
+        self.type = 'RAW'
+        if self.type == 'RAW':
+            self.alpha_agent  = AlphaAgent(self.size)
+            self.summary = SummaryWriter('runs/AlphaAgent_' + str(datetime.datetime.now()))
+        elif self.type == 'TE':
+            self.alpha_agent  = TEAgent(self.size)
+            self.summary = SummaryWriter('runs/AlphaAgent-with-TE_' + str(datetime.datetime.now()))
+        else:
+            raise NameError('Unknown Type')
         self.alpha_player = AlphaPlayer(self.alpha_agent.policy_value_fn, c_puct=self.c_puct, n_playout=self.n_playout, is_selfplay=1)
 
 
@@ -53,6 +60,9 @@ class AlphaSelfTrain:
             data, game_lens = self.game.start_self_play(self.alpha_player, tau=self.tau)
             data = list(data)
             self.buffer.extend(data)
+
+            if self.type == 'TE':
+                self.alpha_agent.buffer.add(data[-1][0], data[-1][1], data[-1][2])
 
             self.summary.add_scalar('game_lens/train', game_lens, self.games_epoch)
             self.games_epoch += 1
