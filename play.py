@@ -33,19 +33,15 @@ class HumanPlayer():
 
 
 def run(args):
-
-    model_file = 'train_model'
+    model_file = None
     try:
         board = Board(board_size=args.size)
         game = Game(board)
 
-        policy = PolicyValueNet(args.size)
-        policy.load(model_file)
-
-        alpha_player = AlphaPlayer(policy.policy_value_fn, c_puct=5, n_playout=args.playout)
+        alpha_player = AlphaPlayer(c_puct=5, n_playout=args.playout, model_file)
         human_player = HumanPlayer(args.size)
 
-        game.start_play(human, alpha_player, start_player=args.start_player, is_shown=1)
+        game.start_play(human_player, alpha_player, start_player=args.start_player, is_shown=1)
 
     except ModuleNotFoundError:
         print("Policy Model File not Found")
@@ -58,6 +54,6 @@ if __name__ == '__main__':
     parser.add_argument('-s','--size', default='7')
     parser.add_argument('-e','--epoch', default='100')
     parser.add_argument('-p','--playout', default='800')
-    parser.add_argument('-start','--start_player', default='1')
+    parser.add_argument('--start_player', default='1')
     args = parser.parse_args()
     run(args)

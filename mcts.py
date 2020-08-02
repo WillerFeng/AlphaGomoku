@@ -4,6 +4,8 @@
 # Created by Willer on 2020/03/27
 # I'm in a very, very bad mood today. Feel worthless
 #
+# Update on 2020/08/02
+# Prepare to interview again.
 #
 
 import copy
@@ -11,7 +13,7 @@ import gc
 import random
 import numpy as np
 
-class TreeNode():
+class TreeNode:
     """
     MonteCarloTreeSearch TreeNode
     """
@@ -38,23 +40,21 @@ class TreeNode():
             self.parent.backup(-value)
 
     def get_value(self, c_puct):
-        """
-        Node : Q(s,a) + U(s,a)
-        """
         u = c_puct * self.prob * np.sqrt(self.parent.visit) / (1 + self.visit)
         return self.q / self.visit + u
 
     def is_leaf(self):
         return self.children == {}
+
     def is_root(self):
         return self.parent is None
 
 
-class MonteCarloTreeSearch():
+class MonteCarloTreeSearch:
     """
-    MCTS implementation
+    MonteCarloTreeSearch implementation
     """
-    def __init__(self, policy_value_net, c_puct=5, n_playout=1000):
+    def __init__(self, policy_value_net, n_playout, c_puct=5):
         self.root = TreeNode(None, 1.0)
         self.c_puct = c_puct
         self.n_playout = n_playout
@@ -101,36 +101,35 @@ class MonteCarloTreeSearch():
             self.root.parent = None
         else:
             self.root = TreeNode(None, 1.0)
-        gc.collect()
+            gc.collect()
 
 
-class AlphaPlayer():
-    """AI player based on MCTS"""
+class AlphaPlayer:
+    """
+    The Player to Collect Data or Play with Human
+    """
     def __init__(self, policy_value_net, c_puct=5, n_playout=1000, is_selfplay=1):
         self.mcts = MonteCarloTreeSearch(policy_value_net, c_puct, n_playout)
         self.is_selfplay = is_selfplay
         self.epoch = 1
-
-    def set_player_ind(self, p):
-        self.player = p
 
     def reset(self):
         self.epoch = 1
         self.mcts.update_with_move(-1)
 
     def get_action(self, board, tau=1e-3, return_prob=0):
+
         sensible_moves = board.availables
-        move_probs = np.zeros(board.size ** 2)
+        return_probs = np.zeros(board.size ** 2)
         if len(sensible_moves) > 0:
             acts, probs = self.mcts.get_action(board, tau)
-            move_probs[list(acts)] = probs
+            return_probs[list(acts)] = probs
             if self.is_selfplay:
-                epsilon = 1 / np.log(1 + self.epoch) * 0.25
-                move = np.random.choice(acts, p=(1-epsilon)*probs + epsilon*np.random.dirichlet(0.03*np.ones(len(probs))))
+                move = np.random.choice(acts, p=probs)
                 self.mcts.update_with_move(move)
             else:
                 move = np.random.choice(acts, p=probs)
                 self.mcts.update_with_move(-1)
-            return move, move_probs if return_prob == 1 else move
+            return move, return_probs if return_prob == 1 else move
         else:
             print("WARNING: the board is full")

@@ -34,7 +34,7 @@ class PolicyValueNet(nn.Module):
     """
     policy-value network
     """
-    def __init__(self, board_size, feature_channel=7, channel=3):
+    def __init__(self, board_size, feature_channel=7, channel=48):
         super(PolicyValueNet, self).__init__()
 
         self.size = board_size
@@ -59,7 +59,7 @@ class PolicyValueNet(nn.Module):
 
         x_act = F.relu(self.act_conv1(x))
         x_act = x_act.view(-1, 2 * self.size ** 2)
-        x_act = F.log_softmax(self.act_fc(x_act), dim=1)
+        x_act = F.softmax(self.act_fc(x_act), dim=1)
 
         x_val = F.relu(self.val_conv1(x))
         x_val = x_val.view(-1, self.size ** 2)
@@ -68,7 +68,10 @@ class PolicyValueNet(nn.Module):
         return x_act, x_val
 
 
-class AlphaAgent():
+class AlphaAgent:
+    """
+    The Reinforcement Learning Agent
+    """
     def __init__(self, board_size, feature_channel=7, model_file=None):
 
         self.l2_const = 1e-4
@@ -81,13 +84,6 @@ class AlphaAgent():
         self.optimizer = optim.Adam(self.policy_value_net.parameters(), lr=self.lr, weight_decay=self.l2_const)
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma = 0.95)
 
-    def policy_value(self, state_batch):
-
-        state_batch = torch.FloatTensor(state_batch).to(self.device)
-        log_act_probs, value = self.policy_value_net(state_batch)
-        act_probs = np.exp(log_act_probs.data.cpu().numpy())
-        return act_probs, value.data.cpu().numpy()
-
     def policy_value_fn(self, board):
         """
         input: board
@@ -95,9 +91,10 @@ class AlphaAgent():
         action and the score of the board state
         """
         legal_positions = board.availables
-        current_state = np.ascontiguousarray(board.current_state(self.feature_channel).reshape(-1, self.feature_channel, self.board_size, self.board_size))
-        log_act_probs, value = self.policy_value_net(torch.from_numpy(current_state).to(self.device).float())
-        act_probs = np.exp(log_act_probs.data.cpu().numpy().flatten())
+        current_state = torch.FloatTensor([board.current_state]).to(self.device)
+        act_probs, value = self.policy_value_net(current_state)
+
+        act_probs = act_probs.data.cpu().numpy().flatten()
         act_probs = zip(legal_positions, act_probs[legal_positions])
         value = value.data[0][0]
         return act_probs, value
@@ -108,11 +105,11 @@ class AlphaAgent():
         mcts_probs   = torch.FloatTensor(mcts_probs).to(self.device)
         winner_batch = torch.FloatTensor(winner_batch).to(self.device)
 
-        log_act_probs, value = self.policy_value_net(state_batch)
+        act_probs, value = self.policy_value_net(state_batch)
 
         # loss = (z - v)^2 - \pi^T * log(p) + c||theta||^2
         value_loss  = F.mse_loss(value.view(-1), winner_batch)
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_act_probs, 1))
+        policy_loss = -torch.mean(torch.sum(torch.log(mcts_probs + 1e-5) * act_probs, 1))
         loss = value_loss + policy_loss
 
         self.optimizer.zero_grad()

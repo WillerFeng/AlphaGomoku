@@ -1,3 +1,4 @@
 *.ipynb
+record.txt
 /__pycache__/
 /.ipynb_checkpoints/
