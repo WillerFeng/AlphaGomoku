@@ -10,6 +10,7 @@ import numpy as np
 import datetime
 import gc
 import torch
+import argparse
 from collections import defaultdict, deque
 from game import Board, Game
 from mcts import AlphaPlayer
@@ -18,7 +19,7 @@ from tensorboardX import SummaryWriter
 
 
 class AlphaSelfTrain:
-    def __init__(self):
+    def __init__(self, type):
 
         self.size = 7
         self.board = Board(size=self.size)
@@ -27,6 +28,7 @@ class AlphaSelfTrain:
         self.tau = 1.0
         self.n_playout = 64
         self.c_puct = 5
+        self.feature_channel = 1
 
         self.learn_rate = 2e-4
         self.buffer_size = 400
@@ -41,12 +43,12 @@ class AlphaSelfTrain:
         self.games_epoch = 1
         self.buffer  = deque(maxlen=self.buffer_size)
 
-        self.type = 'RAW'
+        self.type = type
         if self.type == 'RAW':
-            self.alpha_agent  = AlphaAgent(self.size)
+            self.alpha_agent  = AlphaAgent(self.size, self.feature_channel)
             self.summary = SummaryWriter('runs/AlphaAgent_' + str(datetime.datetime.now()))
         elif self.type == 'TE':
-            self.alpha_agent  = TEAgent(self.size)
+            self.alpha_agent  = TEAgent(self.size, self.feature_channel)
             self.summary = SummaryWriter('runs/AlphaAgent-with-TE_' + str(datetime.datetime.now()))
         else:
             raise NameError('Unknown Type')
@@ -111,5 +113,8 @@ def set_random_seed(seed=0):
 
 if __name__ == '__main__':
     set_random_seed()
-    agent = AlphaSelfTrain()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-t', '--type', default='RAW', help='agent type')
+    args = parser.parse_args()
+    agent = AlphaSelfTrain(args.type)
     agent.train()

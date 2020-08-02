@@ -86,6 +86,7 @@ class PolicyValueNet(nn.Module):
 
     def forward(self, state_input):
 
+        state_input = state_input.view(-1, 1, self.size, self.size)
         x = self.conv1(state_input)
         x = self.block1(x)
         x = self.block2(x)
@@ -105,7 +106,7 @@ class TENet(nn.Module):
     """
     Terminal-Estimation network
     """
-    def __init__(self, board_size, feature_channel=7, channel=48):
+    def __init__(self, board_size, feature_channel=1, channel=48):
         super(TENet, self).__init__()
 
         self.size = board_size
@@ -127,6 +128,7 @@ class TENet(nn.Module):
 
     def forward(self, state_input):
 
+        state_input = state_input.view(-1, 1, self.size, self.size)
         x = self.conv1(state_input)
         x = self.block1(x)
         x = self.block2(x)
@@ -147,11 +149,66 @@ class TENet(nn.Module):
         x_t_val = torch.tanh(self.t_val_fc2(x_t_val))
         return x_act, x_q_val, x_t_val
 
+class Agent:
+    def __init__(self, board_size, feature_channel=1, model_file=None):
+
+        self.l2_const = 1e-4
+        self.lr = 2e-4
+        self.board_size = board_size
+        self.feature_channel = feature_channel
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        self.policy_value_net = PolicyValueNet(self.board_size, self.feature_channel).to(self.device)
+        self.optimizer = optim.Adam(self.policy_value_net.parameters(), lr=self.lr, weight_decay=self.l2_const)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma = 0.96)
+
+    def policy_value_fn(self, board):
+
+        legal_positions = board.availables
+        current_state = torch.FloatTensor([[board.current_state]]).to(self.device)
+        act_probs, value = self.policy_value_net(current_state)
+
+        act_probs = act_probs.data.cpu().numpy().flatten()
+        act_probs = zip(legal_positions, act_probs[legal_positions])
+
+        value = value.data[0][0]
+        return act_probs, value
+
+    def train(self, state_batch, mcts_probs, winner_batch):
+
+        state_batch  = torch.FloatTensor(state_batch).to(self.device)
+        mcts_probs   = torch.FloatTensor(mcts_probs).to(self.device)
+        winner_batch = torch.FloatTensor(winner_batch).to(self.device)
+
+        act_probs, value = self.policy_value_net(state_batch)
+
+        # loss = (z - v)^2 - \pi^T * log(p) + c||theta||^2
+        value_loss  = F.mse_loss(value.view(-1), winner_batch)
+        policy_loss = -torch.mean(torch.sum(torch.log(mcts_probs + 1e-5) * act_probs, 1))
+        loss = value_loss + policy_loss
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        self.scheduler.step()
+
+        return value_loss.item(), policy_loss.item()
+
+
+    def save(self, filename):
+        torch.save(self.policy_value_net.state_dict(), filename + "_policy_value_net_" + str(datetime.datetime.now()))
+        torch.save(self.optimizer.state_dict(), filename + "_optimizer_" + str(datetime.datetime.now()))
+
+    def load(self, filename):
+        self.policy_value_net.load_state_dict(torch.load(filename + "_policy_value_net"))
+        self.optimizer.load_state_dict(torch.load(filename + "_optimizer"))
+
+
 class TEAgent:
     """
     The Reinforcement Learning Agent Combined with Terminal-Estimation Actor-Critic
     """
-    def __init__(self, board_size, feature_channel=7, model_file=None):
+    def __init__(self, board_size, feature_channel=1, model_file=None):
 
         self.l2_const = 1e-4
         self.lr = 2e-4
@@ -168,7 +225,7 @@ class TEAgent:
     def policy_value_fn(self, board):
 
         legal_positions = board.availables
-        current_state = torch.FloatTensor([board.current_state]).to(self.device)
+        current_state = torch.FloatTensor([[board.current_state]]).to(self.device)
         act_probs, q_value, t_value = self.policy_value_net(current_state)
 
         act_probs = act_probs.data.cpu().numpy().flatten()
@@ -182,6 +239,7 @@ class TEAgent:
         state_batch  = torch.FloatTensor(state_batch).to(self.device)
         mcts_probs   = torch.FloatTensor(mcts_probs).to(self.device)
         winner_batch = torch.FloatTensor(winner_batch).to(self.device)
+
 
         act_probs, q_value, _ = self.policy_value_net(state_batch)
 
@@ -218,7 +276,7 @@ class AlphaAgent:
     """
     The Reinforcement Learning Agent
     """
-    def __init__(self, board_size, feature_channel=7, model_file=None):
+    def __init__(self, board_size, feature_channel=1, model_file=None):
 
         self.l2_const = 1e-4
         self.lr = 2e-4
@@ -233,7 +291,7 @@ class AlphaAgent:
     def policy_value_fn(self, board):
 
         legal_positions = board.availables
-        current_state = torch.FloatTensor([board.current_state]).to(self.device)
+        current_state = torch.FloatTensor([[board.current_state]]).to(self.device)
         act_probs, value = self.policy_value_net(current_state)
 
         act_probs = act_probs.data.cpu().numpy().flatten()

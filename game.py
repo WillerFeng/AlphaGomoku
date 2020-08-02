@@ -23,7 +23,7 @@ class Board:
         self.gomoku = 4
         self.players = [1, 2]
         self.recent_lens = recent_lens
-        self.current_state = deque(maxlen=recent_lens)
+        self.current_state = None
 
     def init_board(self, start_player=0):
 
@@ -31,18 +31,18 @@ class Board:
         self.current_player = self.players[start_player]
         self.availables = list(range(self.size ** 2))
         self.states = np.zeros(shape=(self.size, self.size), dtype=int)
-        for i in range(self.recent_lens):
-            self.current_state.append(copy.deepcopy(self.states))
+        self.current_state = copy.deepcopy(self.states)
 
     def move(self, move):
         x, y = divmod(move, self.size)
-        self.states[x][y] = 1 if self.current_player == 1 else -1
+        self.states[x][y] = 1
+        self.states *= -1
         self.availables.remove(move)
         self.current_player = (
             self.players[0] if self.current_player == self.players[1]
             else self.players[1]
         )
-        self.current_state.append(copy.deepcopy(self.states))
+        self.current_state = copy.deepcopy(self.states)
         self.last_move = move
 
     def has_a_winner(self):
@@ -172,7 +172,7 @@ class Game(object):
             for t in count():
                 move, move_probs = player.get_action(self.board, tau=tau, return_prob=1)
 
-                states.append(self.board.current_state)
+                states.append([self.board.current_state])
                 mcts_probs.append(move_probs)
 
                 self.board.move(move)
