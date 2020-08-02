@@ -30,7 +30,7 @@ class AlphaSelfTrain:
 
         self.learn_rate = 1e-3
         self.buffer_size = 40000
-        self.batch_size = 32
+        self.batch_size = 64
 
         self.check_freq = 5
         self.game_total_collect = 100
@@ -39,7 +39,7 @@ class AlphaSelfTrain:
 
         self.train_epoch = 1
         self.games_epoch = 1
-        # self.summary = SummaryWriter()
+        self.summary = SummaryWriter()
         self.buffer  = deque(maxlen=self.buffer_size)
 
         self.alpha_agent  = AlphaAgent(self.size)
@@ -54,7 +54,7 @@ class AlphaSelfTrain:
             data = list(data)
             self.buffer.extend(data)
 
-            # self.summary.add_scalar('game_lens/train', game_lens, self.games_epoch)
+            self.summary.add_scalar('game_lens/train', game_lens, self.games_epoch)
             self.games_epoch += 1
 
 
@@ -66,8 +66,8 @@ class AlphaSelfTrain:
             state_batch, mcts_probs_batch, winner_batch = zip(*mini_batch)
             value_loss, policy_loss = self.alpha_agent.train(state_batch, mcts_probs_batch, winner_batch)
 
-            # self.summary.add_scalar('loss/value', value_loss, self.train_epoch)
-            # self.summary.add_scalar('loss/policy', policy_loss, self.train_epoch)
+            self.summary.add_scalar('loss/value', value_loss, self.train_epoch)
+            self.summary.add_scalar('loss/policy', policy_loss, self.train_epoch)
             self.train_epoch += 1
 
 
@@ -92,6 +92,14 @@ class AlphaSelfTrain:
             print('\n\rquit')
         self.summary.close()
 
+def set_random_seed(seed=0):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+
 if __name__ == '__main__':
+    set_random_seed()
     agent = AlphaSelfTrain()
     agent.train()

@@ -54,19 +54,19 @@ class MonteCarloTreeSearch:
     """
     MonteCarloTreeSearch implementation
     """
-    def __init__(self, policy_value_net, n_playout, c_puct=5):
+    def __init__(self, policy_value_net, c_puct, n_playout):
         self.root = TreeNode(None, 1.0)
         self.c_puct = c_puct
         self.n_playout = n_playout
         self.policy_value_net = policy_value_net
 
-    def get_action(self, state, tau):
+    def get_action(self, board, tau):
         """
         Sample from visit count
         """
         for i in range(self.n_playout):
-            state_copy = copy.deepcopy(state)
-            self.playout(state_copy)
+            board_copy = copy.deepcopy(board)
+            self.playout(board_copy)
 
         act_visits = [(act, node.visit) for act, node in self.root.children.items()]
         acts, visits = zip(*act_visits)
@@ -74,17 +74,17 @@ class MonteCarloTreeSearch:
         act_probs /= sum(act_probs)
         return acts, act_probs
 
-    def playout(self, state):
+    def playout(self, board):
         """
         Execute playout
         """
         node = self.root
         while not node.is_leaf():
             action, node = node.select(self.c_puct)
-            state.do_move(action)
+            board.move(action)
 
-        action_probs, leaf_value = self.policy_value_net(state)
-        end, winner = state.game_end()
+        action_probs, leaf_value = self.policy_value_net(board)
+        end, winner = board.game_end()
 
         if not end:
             node.expand(action_probs)
@@ -92,7 +92,7 @@ class MonteCarloTreeSearch:
             if winner == -1:
                 leaf_value = 0.0
             else:
-                leaf_value = 1.0 if winner == state.get_current_player() else -1.0
+                leaf_value = 1.0 if winner == board.current_player else -1.0
         node.backup(leaf_value)
 
     def update_with_move(self, move):
@@ -108,7 +108,7 @@ class AlphaPlayer:
     """
     The Player to Collect Data or Play with Human
     """
-    def __init__(self, policy_value_net, c_puct=5, n_playout=1000, is_selfplay=1):
+    def __init__(self, policy_value_net, c_puct, n_playout, is_selfplay=1):
         self.mcts = MonteCarloTreeSearch(policy_value_net, c_puct, n_playout)
         self.is_selfplay = is_selfplay
         self.epoch = 1

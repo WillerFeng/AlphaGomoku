@@ -85,17 +85,14 @@ class AlphaAgent:
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=10, gamma = 0.95)
 
     def policy_value_fn(self, board):
-        """
-        input: board
-        output: a list of (action, probability) tuples for each available
-        action and the score of the board state
-        """
+
         legal_positions = board.availables
         current_state = torch.FloatTensor([board.current_state]).to(self.device)
         act_probs, value = self.policy_value_net(current_state)
 
         act_probs = act_probs.data.cpu().numpy().flatten()
         act_probs = zip(legal_positions, act_probs[legal_positions])
+
         value = value.data[0][0]
         return act_probs, value
 
